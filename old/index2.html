@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <title>Portfolio optimalizace – ČEZ & KB</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 60%; margin-bottom: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background-color: #f2f2f2; }
+  </style>
+</head>
+<body>
+  <h1>Portfolio optimalizace – ČEZ & Komerční banka</h1>
+  <p>Tato aplikace zobrazuje výsledky sestavení dvou portfolií na základě simulovaných dat za 4 měsíce. První 2 měsíce sloužily k odhadu statistik, poslední 2 k vyhodnocení.</p>
+  
+  <h2>Sestavená portfolia</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Portfolio</th>
+        <th>Váha ČEZ</th>
+        <th>Váha KB</th>
+        <th>Očekávaný výnos</th>
+        <th>Riziko (σ)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Minimální riziko</td>
+        <td id="mv-weigth-a"></td>
+        <td id="mv-weigth-b"></td>
+        <td id="mv-return"></td>
+        <td id="mv-risk"></td>
+      </tr>
+      <tr>
+        <td>Equal Risk Contribution</td>
+        <td id="erc-weigth-a"></td>
+        <td id="erc-weigth-b"></td>
+        <td id="erc-return"></td>
+        <td id="erc-risk"></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <h2>Rizikové příspěvky (ze druhého období)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Portfolio</th>
+        <th>Příspěvek ČEZ</th>
+        <th>Příspěvek KB</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Minimální riziko</td>
+        <td id="mv-rc-a"></td>
+        <td id="mv-rc-b"></td>
+      </tr>
+      <tr>
+        <td>Equal Risk Contribution</td>
+        <td id="erc-rc-a"></td>
+        <td id="erc-rc-b"></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <script>
+    // Simulovaná data z prvního období (odhadnuté)
+    const sigmaA = 0.04; // ČEZ
+    const sigmaB = 0.03; // KB
+    const varA = sigmaA ** 2; // 0.0016
+    const varB = sigmaB ** 2; // 0.0009
+    const cov = 0.00024;    // Kovariance při ρ = 0.2
+
+    // Výpočet portfolií z odhadů
+    const wA_mv = (varB - cov) / (varA + varB - 2*cov);
+    const wB_mv = 1 - wA_mv;
+    const wA_erc = sigmaB / (sigmaA + sigmaB);
+    const wB_erc = 1 - wA_erc;
+
+    // Simulovaná data ze druhého období
+    const muA = 0.016; // 1,6%
+    const muB = 0.010; // 1,0%
+    const sigmaA2 = 0.035;
+    const sigmaB2 = 0.025;
+    const varA2 = sigmaA2 ** 2;
+    const varB2 = sigmaB2 ** 2;
+    const cov2 = 0.2 * sigmaA2 * sigmaB2; // 0.000175
+
+    // Výpočet portfoliového výnosu
+    function portfolioReturn(wA, wB) {
+      return wA * muA + wB * muB;
+    }
+    
+    // Výpočet portfoliového rizika
+    function portfolioRisk(wA, wB) {
+      const variance = wA**2 * varA2 + wB**2 * varB2 + 2 * wA * wB * cov2;
+      return Math.sqrt(variance);
+    }
+    
+    // Výpočet risk contribution (příspěvek k riziku)
+    function riskContribution(wA, wB, sigmaA2, sigmaB2, cov, portRisk) {
+      const rcA = wA * (wA * varA2 + wB * cov);
+      const rcB = wB * (wB * varB2 + wA * cov);
+      return { rcA: rcA/ (portRisk**2), rcB: rcB/ (portRisk**2) }; // vyjádřeno v procentech celkové variance
+    }
+    
+    // Výpočty pro obě portfolia
+    const ret_mv = portfolioReturn(wA_mv, wB_mv);
+    const risk_mv = portfolioRisk(wA_mv, wB_mv);
+    const contrib_mv = riskContribution(wA_mv, wB_mv, sigmaA2, sigmaB2, cov2, risk_mv);
+
+    const ret_erc = portfolioReturn(wA_erc, wB_erc);
+    const risk_erc = portfolioRisk(wA_erc, wB_erc);
+    const contrib_erc = riskContribution(wA_erc, wB_erc, sigmaA2, sigmaB2, cov2, risk_erc);
+    
+    // Zobrazení výsledků (převedeno na procenta)
+    document.getElementById("mv-weigth-a").innerText = (wA_mv*100).toFixed(1) + "%";
+    document.getElementById("mv-weigth-b").innerText = (wB_mv*100).toFixed(1) + "%";
+    document.getElementById("mv-return").innerText = (ret_mv*100).toFixed(2) + "%";
+    document.getElementById("mv-risk").innerText = (risk_mv*100).toFixed(2) + "%";
+    document.getElementById("mv-rc-a").innerText = (contrib_mv.rcA*100).toFixed(1) + "%";
+    document.getElementById("mv-rc-b").innerText = (contrib_mv.rcB*100).toFixed(1) + "%";
+
+    document.getElementById("erc-weigth-a").innerText = (wA_erc*100).toFixed(1) + "%";
+    document.getElementById("erc-weigth-b").innerText = (wB_erc*100).toFixed(1) + "%";
+    document.getElementById("erc-return").innerText = (ret_erc*100).toFixed(2) + "%";
+    document.getElementById("erc-risk").innerText = (risk_erc*100).toFixed(2) + "%";
+    document.getElementById("erc-rc-a").innerText = (contrib_erc.rcA*100).toFixed(1) + "%";
+    document.getElementById("erc-rc-b").innerText = (contrib_erc.rcB*100).toFixed(1) + "%";
+  </script>
+</body>
+</html>

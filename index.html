@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analýza portfolia - Pražská burza</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-bottom: 20px;
+        }
+        .result-section {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .loading-spinner {
+            width: 3rem;
+            height: 3rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4 text-center">Analýza portfolia cenných papírů</h1>
+        <p class="text-center mb-4">Pražská burza cenných papírů</p>
+        
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3 class="card-title mb-0">Výběr cenných papírů</h3>
+            </div>
+            <div class="card-body">
+                <form id="portfolioForm">
+                    <div class="row mb-3">
+                        <div class="col-md-5">
+                            <label for="security1" class="form-label">První cenný papír:</label>
+                            <select id="security1" class="form-select" required>
+                                <option value="" selected disabled>Vyberte cenný papír</option>
+                                <option value="BAACEZ">ČEZ (BAACEZ)</option>
+                                <option value="BAAKOMB">Komerční banka (BAAKOMB)</option>
+                                <option value="BAAERST">Erste Bank (BAAERST)</option>
+                                <option value="BAATELEC">O2 C.R. (BAATELEC)</option>
+                                <option value="BAAVGP">VGP (BAAVGP)</option>
+                                <option value="BAAPHILIP">Philip Morris ČR (BAAPHILIP)</option>
+                                <option value="BAAMONETA">MONETA Money Bank (BAAMONETA)</option>
+                                <option value="BAACOLT">Colt CZ Group (BAACOLT)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="security2" class="form-label">Druhý cenný papír:</label>
+                            <select id="security2" class="form-select" required>
+                                <option value="" selected disabled>Vyberte cenný papír</option>
+                                <option value="BAACEZ">ČEZ (BAACEZ)</option>
+                                <option value="BAAKOMB">Komerční banka (BAAKOMB)</option>
+                                <option value="BAAERST">Erste Bank (BAAERST)</option>
+                                <option value="BAATELEC">O2 C.R. (BAATELEC)</option>
+                                <option value="BAAVGP">VGP (BAAVGP)</option>
+                                <option value="BAAPHILIP">Philip Morris ČR (BAAPHILIP)</option>
+                                <option value="BAAMONETA">MONETA Money Bank (BAAMONETA)</option>
+                                <option value="BAACOLT">Colt CZ Group (BAACOLT)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">Analyzovat</button>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="dateRange" class="form-label">Časové období:</label>
+                            <select id="dateRange" class="form-select">
+                                <option value="4">Poslední 4 měsíce</option>
+                                <option value="6">Poslední 6 měsíců</option>
+                                <option value="12">Poslední rok</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="trainingPeriod" class="form-label">Trénovací období:</label>
+                            <select id="trainingPeriod" class="form-select">
+                                <option value="0.5">První polovina</option>
+                                <option value="0.6">První 60%</option>
+                                <option value="0.7">První 70%</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="loading" id="loadingIndicator">
+            <div class="spinner-border loading-spinner text-primary" role="status">
+                <span class="visually-hidden">Načítání...</span>
+            </div>
+            <p class="mt-2">Načítám data a provádím výpočty...</p>
+        </div>
+        
+        <div id="resultsContainer" style="display:none;">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <h4 class="card-title mb-0">Historické výnosy</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="returnsChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <h4 class="card-title mb-0">Korelace výnosů</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="correlationChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h4 class="card-title mb-0">Portfolio s minimálním rizikem</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <h5>Váhy aktiv:</h5>
+                                <div class="progress mb-2" style="height: 30px;">
+                                    <div id="minRiskWeight1" class="progress-bar" role="progressbar" style="width: 50%;" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
+                                    <div id="minRiskWeight2" class="progress-bar bg-success" role="progressbar" style="width: 50%;" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span id="minRiskAsset1Label">Cenný papír 1</span>
+                                    <span id="minRiskAsset2Label">Cenný papír 2</span>
+                                </div>
+                            </div>
+                            
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Ukazatel</th>
+                                        <th>Trénovací období</th>
+                                        <th>Testovací období</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Očekávaný výnos</td>
+                                        <td id="minRiskTrainReturn">-</td>
+                                        <td id="minRiskTestReturn">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Riziko (volatilita)</td>
+                                        <td id="minRiskTrainRisk">-</td>
+                                        <td id="minRiskTestRisk">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Sharpeův poměr</td>
+                                        <td id="minRiskTrainSharpe">-</td>
+                                        <td id="minRiskTestSharpe">-</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            
+                            <h5 class="mt-3">Příspěvek k riziku:</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="text-center">Trénovací období</h6>
+                                    <div class="chart-container" style="height: 200px;">
+                                        <canvas id="minRiskTrainContribChart"></canvas>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-center">Testovací období</h6>
+                                    <div class="chart-container" style="height: 200px;">
+                                        <canvas id="minRiskTestContribChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-warning text-dark">
+                            <h4 class="card-title mb-0">Portfolio se shodným příspěvkem k riziku</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <h5>Váhy aktiv:</h5>
+                                <div class="progress mb-2" style="height: 30px;">
+                                    <div id="equalContribWeight1" class="progress-bar" role="progressbar" style="width: 50%;" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
+                                    <div id="equalContribWeight2" class="progress-bar bg-success" role="progressbar" style="width: 50%;" aria-valuenow="50" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span id="equalContribAsset1Label">Cenný papír 1</span>
+                                    <span id="equalContribAsset2Label">Cenný papír 2</span>
+                                </div>
+                            </div>
+                            
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Ukazatel</th>
+                                        <th>Trénovací období</th>
+                                        <th>Testovací období</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Očekávaný výnos</td>
+                                        <td id="equalContribTrainReturn">-</td>
+                                        <td id="equalContribTestReturn">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Riziko (volatilita)</td>
+                                        <td id="equalContribTrainRisk">-</td>
+                                        <td id="equalContribTestRisk">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Sharpeův poměr</td>
+                                        <td id="equalContribTrainSharpe">-</td>
+                                        <td id="equalContribTestSharpe">-</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            
+                            <h5 class="mt-3">Příspěvek k riziku:</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="text-center">Trénovací období</h6>
+                                    <div class="chart-container" style="height: 200px;">
+                                        <canvas id="equalContribTrainContribChart"></canvas>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-center">Testovací období</h6>
+                                    <div class="chart-container" style="height: 200px;">
+                                        <canvas id="equalContribTestContribChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-header bg-secondary text-white">
+                    <h4 class="card-title mb-0">Závěrečné hodnocení</h4>
+                </div>
+                <div class="card-body" id="conclusionText">
+                    <!-- Zde bude vygenerován závěr -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Store chart references globally so we can destroy them later
+        let returnsChart = null;
+        let correlationChart = null;
+        let minRiskTrainContribChart = null;
+        let minRiskTestContribChart = null;
+        let equalContribTrainContribChart = null;
+        let equalContribTestContribChart = null;
+
+        // Function to fetch stock data from our PHP API
+        async function fetchStockData(symbol, months) {
+            try {
+                // Call our PHP API endpoint
+                const response = await fetch(`fetch_stock_data.php?symbol=${symbol}&months=${months}`);
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // If we got no valid data, throw an error
+                if (data.dates.length === 0) {
+                    throw new Error("No valid data received");
+                }
+                
+                return data;
+            } catch (error) {
+                console.error("Error fetching data from API:", error);
+                // Fall back to simulated data if API fails
+                return simulateStockData(symbol, months);
+            }
+        }
+
+        // Keep the original function as a fallback
+        function simulateStockData(symbol, months) {
+            console.log(`Falling back to simulated data for ${symbol}`);
+            // Simulace získání dat z API
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    // Generování náhodných dat pro simulaci
+                    const dates = [];
+                    const prices = [];
+                    const returns = [];
+                    
+                    const today = new Date();
+                    let currentDate = new Date(today);
+                    currentDate.setMonth(today.getMonth() - months);
+                    
+                    let previousPrice = 500 + Math.random() * 1000; // Náhodná počáteční cena
+                    
+                    for (let i = 0; i < months * 4; i++) { // 4 týdny v měsíci (přibližně)
+                        currentDate.setDate(currentDate.getDate() + 7);
+                        dates.push(currentDate.toISOString().split('T')[0]);
+                        
+                        // Simulace náhodné změny ceny
+                        const change = (Math.random() - 0.5) * 0.05; // Náhodná změna +/- 5%
+                        const newPrice = previousPrice * (1 + change);
+                        prices.push(newPrice);
+                        
+                        // Výpočet procentuálního výnosu
+                        if (i > 0) {
+                            const returnValue = ((newPrice / prices[i-1]) - 1) * 100;
+                            returns.push(returnValue);
+                        } else {
+                            returns.push(0);
+                        }
+                        
+                        previousPrice = newPrice;
+                    }
+                    
+                    resolve({
+                        dates: dates,
+                        prices: prices,
+                        returns: returns,
+                        symbol: symbol
+                    });
+                }, 500);
+            });
+        }
+
+        // Funkce pro výpočet kovarianční matice
+        function calculateCovarianceMatrix(returns1, returns2) {
+            const n = Math.min(returns1.length, returns2.length);
+            const mean1 = returns1.reduce((a, b) => a + b, 0) / n;
+            const mean2 = returns2.reduce((a, b) => a + b, 0) / n;
+            
+            let covariance = 0;
+            let variance1 = 0;
+            let variance2 = 0;
+            
+            for (let i = 0; i < n; i++) {
+                const diff1 = returns1[i] - mean1;
+                const diff2 = returns2[i] - mean2;
+                covariance += diff1 * diff2;
+                variance1 += diff1 * diff1;
+                variance2 += diff2 * diff2;
+            }
+            
+            covariance /= (n - 1);
+            variance1 /= (n - 1);
+            variance2 /= (n - 1);
+            
+            return {
+                covariance: covariance,
+                variance1: variance1,
+                variance2: variance2,
+                correlation: covariance / (Math.sqrt(variance1) * Math.sqrt(variance2))
+            };
+        }
+
+        // Funkce pro výpočet vah portfolia s minimálním rizikem
+        function calculateMinimumRiskPortfolio(covMatrix) {
+            const { variance1, variance2, covariance } = covMatrix;
+            const denominator = variance1 + variance2 - 2 * covariance;
+            
+            // Váhy pro minimální riziko
+            let w1 = (variance2 - covariance) / denominator;
+            let w2 = 1 - w1;
+            
+            // Omezení vah na interval [0, 1]
+            w1 = Math.max(0, Math.min(1, w1));
+            w2 = 1 - w1;
+            
+            return { w1, w2 };
+        }
+
+        // Funkce pro výpočet portfolia se shodným příspěvkem k riziku
+        function calculateEqualContributionPortfolio(covMatrix) {
+            const { variance1, variance2, covariance } = covMatrix;
+            
+            // Iterační metoda pro nalezení vah se stejným příspěvkem k riziku
+            let w1 = 0.5;
+            let w2 = 0.5;
+            
+            for (let i = 0; i < 100; i++) {
+                const portfolioVariance = w1*w1*variance1 + w2*w2*variance2 + 2*w1*w2*covariance;
+                const portfolioRisk = Math.sqrt(portfolioVariance);
+                
+                const contrib1 = w1 * (w1 * variance1 + w2 * covariance) / portfolioRisk;
+                const contrib2 = w2 * (w2 * variance2 + w1 * covariance) / portfolioRisk;
+                
+                if (Math.abs(contrib1 - contrib2) < 0.0001) {
+                    break;
+                }
+                
+                if (contrib1 > contrib2) {
+                    w1 -= 0.01;
+                } else {
+                    w1 += 0.01;
+                }
+                
+                w1 = Math.max(0, Math.min(1, w1));
+                w2 = 1 - w1;
+            }
+            
+            return { w1, w2 };
+        }
+
+        // Funkce pro výpočet výnosu a rizika portfolia
+        function calculatePortfolioPerformance(returns1, returns2, w1, w2) {
+            const n = Math.min(returns1.length, returns2.length);
+            const portfolioReturns = [];
+            
+            for (let i = 0; i < n; i++) {
+                portfolioReturns.push(w1 * returns1[i] + w2 * returns2[i]);
+            }
+            
+            const meanReturn = portfolioReturns.reduce((a, b) => a + b, 0) / n;
+            let sumSquaredDiff = 0;
+            
+            for (let i = 0; i < n; i++) {
+                sumSquaredDiff += (portfolioReturns[i] - meanReturn) ** 2;
+            }
+            
+            const risk = Math.sqrt(sumSquaredDiff / (n - 1));
+            const sharpeRatio = meanReturn / risk;
+            
+            return {
+                returns: portfolioReturns,
+                meanReturn: meanReturn,
+                risk: risk,
+                sharpeRatio: sharpeRatio
+            };
+        }
+
+        // Funkce pro výpočet příspěvků k riziku portfolia
+        function calculateRiskContributions(returns1, returns2, w1, w2) {
+            const covMatrix = calculateCovarianceMatrix(returns1, returns2);
+            const { variance1, variance2, covariance } = covMatrix;
+            
+            const portfolioVariance = w1*w1*variance1 + w2*w2*variance2 + 2*w1*w2*covariance;
+            const portfolioRisk = Math.sqrt(portfolioVariance);
+            
+            const contrib1 = w1 * (w1 * variance1 + w2 * covariance) / portfolioRisk;
+            const contrib2 = w2 * (w2 * variance2 + w1 * covariance) / portfolioRisk;
+            
+            return {
+                contribution1: contrib1,
+                contribution2: contrib2,
+                percentContribution1: (contrib1 / portfolioRisk) * 100,
+                percentContribution2: (contrib2 / portfolioRisk) * 100
+            };
+        }
+
+        // Modify the createReturnsChart function to destroy existing chart
+        function createReturnsChart(dates, returns1, returns2, symbol1, symbol2) {
+            const ctx = document.getElementById('returnsChart').getContext('2d');
+            
+            // Destroy existing chart if it exists
+            if (returnsChart) {
+                returnsChart.destroy();
+            }
+            
+            returnsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [
+                        {
+                            label: symbol1,
+                            data: returns1,
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            tension: 0.1
+                        },
+                        {
+                            label: symbol2,
+                            data: returns2,
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Týdenní výnosy cenných papírů (%)'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Výnos (%)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Datum'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Similarly modify the other chart creation functions
+        function createCorrelationChart(returns1, returns2, symbol1, symbol2, correlation) {
+            const ctx = document.getElementById('correlationChart').getContext('2d');
+            
+            // Destroy existing chart if it exists
+            if (correlationChart) {
+                correlationChart.destroy();
+            }
+            
+            const scatterData = [];
+            for (let i = 0; i < Math.min(returns1.length, returns2.length); i++) {
+                scatterData.push({
+                    x: returns1[i],
+                    y: returns2[i]
+                });
+            }
+            
+            correlationChart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Korelace výnosů',
+                        data: scatterData,
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Korelace výnosů (r = ${correlation.toFixed(3)})`
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${symbol1}: ${context.parsed.x.toFixed(2)}%, ${symbol2}: ${context.parsed.y.toFixed(2)}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: `Výnos ${symbol1} (%)`
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: `Výnos ${symbol2} (%)`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createRiskContributionChart(chartId, contrib1, contrib2, symbol1, symbol2) {
+            const ctx = document.getElementById(chartId).getContext('2d');
+            
+            // Determine which chart reference to use based on chartId
+            let chartRef;
+            switch(chartId) {
+                case 'minRiskTrainContribChart':
+                    if (minRiskTrainContribChart) minRiskTrainContribChart.destroy();
+                    chartRef = minRiskTrainContribChart;
+                    break;
+                case 'minRiskTestContribChart':
+                    if (minRiskTestContribChart) minRiskTestContribChart.destroy();
+                    chartRef = minRiskTestContribChart;
+                    break;
+                case 'equalContribTrainContribChart':
+                    if (equalContribTrainContribChart) equalContribTrainContribChart.destroy();
+                    chartRef = equalContribTrainContribChart;
+                    break;
+                case 'equalContribTestContribChart':
+                    if (equalContribTestContribChart) equalContribTestContribChart.destroy();
+                    chartRef = equalContribTestContribChart;
+                    break;
+            }
+            
+            // Create the chart and store the reference
+            switch(chartId) {
+                case 'minRiskTrainContribChart':
+                    minRiskTrainContribChart = new Chart(ctx, {
+                        type: 'pie',
+                        data: {
+                            labels: [symbol1, symbol2],
+                            datasets: [{
+                                data: [contrib1, contrib2],
+                                backgroundColor: [
+                                    'rgba(54, 162, 235, 0.6)',
+                                    'rgba(75, 192, 192, 0.6)'
+                                ],
+                                borderColor: [
+                                    'rgba(54, 162, 235, 1)',
+                                    'rgba(75, 192, 192, 1)'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            const label = context.label || '';
+                                            const value = context.parsed || 0;
+                                            return `${label}: ${value.toFixed(2)}%`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    return minRiskTrainContribChart;
+                case 'minRiskTestContribChart':
+                    minRiskTestContribChart = new Chart(ctx, {
+                        type: 'pie',
+                        data: {
+                            labels: [symbol1, symbol2],
+                            datasets: [{
+                                data: [contrib1, contrib2],
+                                backgroundColor: [
+                                    'rgba(54, 162, 235, 0.6)',
+                                    'rgba(75, 192, 192, 0.6)'
+                                ],
+                                borderColor: [
+                                    'rgba(54, 162, 235, 1)',
+                                    'rgba(75, 192, 192, 1)'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            const label = context.label || '';
+                                            const value = context.parsed || 0;
+                                            return `${label}: ${value.toFixed(2)}%`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    return minRiskTestContribChart;
+                case 'equalContribTrainContribChart':
+                    equalContribTrainContribChart = new Chart(ctx, {
+                        type: 'pie',
+                        data: {
+                            labels: [symbol1, symbol2],
+                            datasets: [{
+                                data: [contrib1, contrib2],
+                                backgroundColor: [
+                                    'rgba(54, 162, 235, 0.6)',
+                                    'rgba(75, 192, 192, 0.6)'
+                                ],
+                                borderColor: [
+                                    'rgba(54, 162, 235, 1)',
+                                    'rgba(75, 192, 192, 1)'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            const label = context.label || '';
+                                            const value = context.parsed || 0;
+                                            return `${label}: ${value.toFixed(2)}%`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    return equalContribTrainContribChart;
+                case 'equalContribTestContribChart':
+                    equalContribTestContribChart = new Chart(ctx, {
+                        type: 'pie',
+                        data: {
+                            labels: [symbol1, symbol2],
+                            datasets: [{
+                                data: [contrib1, contrib2],
+                                backgroundColor: [
+                                    'rgba(54, 162, 235, 0.6)',
+                                    'rgba(75, 192, 192, 0.6)'
+                                ],
+                                borderColor: [
+                                    'rgba(54, 162, 235, 1)',
+                                    'rgba(75, 192, 192, 1)'
+                                ],
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            const label = context.label || '';
+                                            const value = context.parsed || 0;
+                                            return `${label}: ${value.toFixed(2)}%`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    return equalContribTestContribChart;
+            }
+        }
+
+        // Zpracování formuláře
+        document.getElementById('portfolioForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const security1 = document.getElementById('security1').value;
+            const security2 = document.getElementById('security2').value;
+            const dateRange = parseInt(document.getElementById('dateRange').value);
+            const trainingRatio = parseFloat(document.getElementById('trainingPeriod').value);
+            
+            if (!security1 || !security2 || security1 === security2) {
+                alert('Vyberte dva různé cenné papíry');
+                return;
+            }
+            
+            // Zobrazení načítání
+            document.getElementById('loadingIndicator').style.display = 'block';
+            document.getElementById('resultsContainer').style.display = 'none';
+            
+            try {
+                // Získání dat z burzy (simulováno)
+                const data1 = await fetchStockData(security1, dateRange);
+                const data2 = await fetchStockData(security2, dateRange);
+                
+                // Rozdělení dat na trénovací a testovací období
+                const dataLength = Math.min(data1.returns.length, data2.returns.length);
+                const splitIndex = Math.floor(dataLength * trainingRatio);
+                
+                const trainingDates = data1.dates.slice(0, splitIndex);
+                const testingDates = data1.dates.slice(splitIndex);
+                
+                const trainingReturns1 = data1.returns.slice(0, splitIndex);
+                const trainingReturns2 = data2.returns.slice(0, splitIndex);
+                
+                const testingReturns1 = data1.returns.slice(splitIndex);
+                const testingReturns2 = data2.returns.slice(splitIndex);
+                
+                // Výpočet kovarianční matice pro trénovací období
+                const trainCovMatrix = calculateCovarianceMatrix(trainingReturns1, trainingReturns2);
+                
+                // Výpočet portfolia s minimálním rizikem
+                const minRiskWeights = calculateMinimumRiskPortfolio(trainCovMatrix);
+                
+                // Výpočet portfolia se shodným příspěvkem k riziku
+                const equalContribWeights = calculateEqualContributionPortfolio(trainCovMatrix);
+                
+                // Výpočet výkonu portfolií na trénovacích datech
+                const minRiskTrainPerformance = calculatePortfolioPerformance(
+                    trainingReturns1, trainingReturns2, minRiskWeights.w1, minRiskWeights.w2
+                );
+                
+                const equalContribTrainPerformance = calculatePortfolioPerformance(
+                    trainingReturns1, trainingReturns2, equalContribWeights.w1, equalContribWeights.w2
+                );
+                
+                // Výpočet výkonu portfolií na testovacích datech
+                const minRiskTestPerformance = calculatePortfolioPerformance(
+                    testingReturns1, testingReturns2, minRiskWeights.w1, minRiskWeights.w2
+                );
+                
+                const equalContribTestPerformance = calculatePortfolioPerformance(
+                    testingReturns1, testingReturns2, equalContribWeights.w1, equalContribWeights.w2
+                );
+                
+                // Výpočet příspěvků k riziku pro trénovací období
+                const minRiskTrainContrib = calculateRiskContributions(
+                    trainingReturns1, trainingReturns2, minRiskWeights.w1, minRiskWeights.w2
+                );
+                
+                const equalContribTrainContrib = calculateRiskContributions(
+                    trainingReturns1, trainingReturns2, equalContribWeights.w1, equalContribWeights.w2
+                );
+                
+                // Výpočet příspěvků k riziku pro testovací období
+                const minRiskTestContrib = calculateRiskContributions(
+                    testingReturns1, testingReturns2, minRiskWeights.w1, minRiskWeights.w2
+                );
+                
+                const equalContribTestContrib = calculateRiskContributions(
+                    testingReturns1, testingReturns2, equalContribWeights.w1, equalContribWeights.w2
+                );
+
+                // Zobrazení výsledků
+                // Grafy
+                createReturnsChart(data1.dates, data1.returns, data2.returns, security1, security2);
+                createCorrelationChart(trainingReturns1, trainingReturns2, security1, security2, trainCovMatrix.correlation);
+                
+                // Aktualizace vah portfolia s minimálním rizikem
+                document.getElementById('minRiskWeight1').style.width = `${minRiskWeights.w1 * 100}%`;
+                document.getElementById('minRiskWeight1').textContent = `${(minRiskWeights.w1 * 100).toFixed(1)}%`;
+                document.getElementById('minRiskWeight2').style.width = `${minRiskWeights.w2 * 100}%`;
+                document.getElementById('minRiskWeight2').textContent = `${(minRiskWeights.w2 * 100).toFixed(1)}%`;
+                document.getElementById('minRiskAsset1Label').textContent = security1;
+                document.getElementById('minRiskAsset2Label').textContent = security2;
+                
+                // Aktualizace vah portfolia se shodným příspěvkem k riziku
+                document.getElementById('equalContribWeight1').style.width = `${equalContribWeights.w1 * 100}%`;
+                document.getElementById('equalContribWeight1').textContent = `${(equalContribWeights.w1 * 100).toFixed(1)}%`;
+                document.getElementById('equalContribWeight2').style.width = `${equalContribWeights.w2 * 100}%`;
+                document.getElementById('equalContribWeight2').textContent = `${(equalContribWeights.w2 * 100).toFixed(1)}%`;
+                document.getElementById('equalContribAsset1Label').textContent = security1;
+                document.getElementById('equalContribAsset2Label').textContent = security2;
+                
+                // Aktualizace tabulky pro portfolio s minimálním rizikem
+                document.getElementById('minRiskTrainReturn').textContent = `${minRiskTrainPerformance.meanReturn.toFixed(2)}%`;
+                document.getElementById('minRiskTestReturn').textContent = `${minRiskTestPerformance.meanReturn.toFixed(2)}%`;
+                document.getElementById('minRiskTrainRisk').textContent = `${minRiskTrainPerformance.risk.toFixed(2)}%`;
+                document.getElementById('minRiskTestRisk').textContent = `${minRiskTestPerformance.risk.toFixed(2)}%`;
+                document.getElementById('minRiskTrainSharpe').textContent = minRiskTrainPerformance.sharpeRatio.toFixed(3);
+                document.getElementById('minRiskTestSharpe').textContent = minRiskTestPerformance.sharpeRatio.toFixed(3);
+                
+                // Aktualizace tabulky pro portfolio se shodným příspěvkem k riziku
+                document.getElementById('equalContribTrainReturn').textContent = `${equalContribTrainPerformance.meanReturn.toFixed(2)}%`;
+                document.getElementById('equalContribTestReturn').textContent = `${equalContribTestPerformance.meanReturn.toFixed(2)}%`;
+                document.getElementById('equalContribTrainRisk').textContent = `${equalContribTrainPerformance.risk.toFixed(2)}%`;
+                document.getElementById('equalContribTestRisk').textContent = `${equalContribTestPerformance.risk.toFixed(2)}%`;
+                document.getElementById('equalContribTrainSharpe').textContent = equalContribTrainPerformance.sharpeRatio.toFixed(3);
+                document.getElementById('equalContribTestSharpe').textContent = equalContribTestPerformance.sharpeRatio.toFixed(3);
+                
+                // Vytvoření grafů příspěvků k riziku
+                createRiskContributionChart(
+                    'minRiskTrainContribChart', 
+                    minRiskTrainContrib.percentContribution1, 
+                    minRiskTrainContrib.percentContribution2, 
+                    security1, 
+                    security2
+                );
+                
+                createRiskContributionChart(
+                    'minRiskTestContribChart', 
+                    minRiskTestContrib.percentContribution1, 
+                    minRiskTestContrib.percentContribution2, 
+                    security1, 
+                    security2
+                );
+                
+                createRiskContributionChart(
+                    'equalContribTrainContribChart', 
+                    equalContribTrainContrib.percentContribution1, 
+                    equalContribTrainContrib.percentContribution2, 
+                    security1, 
+                    security2
+                );
+                
+                createRiskContributionChart(
+                    'equalContribTestContribChart', 
+                    equalContribTestContrib.percentContribution1, 
+                    equalContribTestContrib.percentContribution2, 
+                    security1, 
+                    security2
+                );
+                
+                // Generování závěrečného hodnocení
+                const conclusion = generateConclusion(
+                    security1, 
+                    security2, 
+                    minRiskWeights, 
+                    equalContribWeights, 
+                    minRiskTrainPerformance, 
+                    minRiskTestPerformance, 
+                    equalContribTrainPerformance, 
+                    equalContribTestPerformance,
+                    minRiskTrainContrib,
+                    minRiskTestContrib,
+                    equalContribTrainContrib,
+                    equalContribTestContrib
+                );
+                
+                document.getElementById('conclusionText').innerHTML = conclusion;
+                
+                // Zobrazení výsledků
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('resultsContainer').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Chyba při zpracování dat:', error);
+                alert('Došlo k chybě při zpracování dat. Zkuste to prosím znovu.');
+                document.getElementById('loadingIndicator').style.display = 'none';
+            }
+        });
+
+        // Funkce pro generování závěrečného hodnocení
+        function generateConclusion(
+            security1, 
+            security2, 
+            minRiskWeights, 
+            equalContribWeights, 
+            minRiskTrainPerformance, 
+            minRiskTestPerformance, 
+            equalContribTrainPerformance, 
+            equalContribTestPerformance,
+            minRiskTrainContrib,
+            minRiskTestContrib,
+            equalContribTrainContrib,
+            equalContribTestContrib
+        ) {
+            let conclusion = `<p>Na základě analýzy dvou cenných papírů (${security1} a ${security2}) jsme sestavili dvě různá portfolia:</p>`;
+            
+            conclusion += `<h5>Portfolio s minimálním rizikem</h5>`;
+            conclusion += `<p>Toto portfolio má optimální váhy ${(minRiskWeights.w1 * 100).toFixed(1)}% pro ${security1} a ${(minRiskWeights.w2 * 100).toFixed(1)}% pro ${security2}.</p>`;
+            
+            if (minRiskTestPerformance.meanReturn > minRiskTrainPerformance.meanReturn) {
+                conclusion += `<p>V testovacím období toto portfolio dosáhlo <strong>vyššího výnosu</strong> (${minRiskTestPerformance.meanReturn.toFixed(2)}%) než v trénovacím období (${minRiskTrainPerformance.meanReturn.toFixed(2)}%).</p>`;
+            } else {
+                conclusion += `<p>V testovacím období toto portfolio dosáhlo <strong>nižšího výnosu</strong> (${minRiskTestPerformance.meanReturn.toFixed(2)}%) než v trénovacím období (${minRiskTrainPerformance.meanReturn.toFixed(2)}%).</p>`;
+            }
+            
+            if (minRiskTestPerformance.risk > minRiskTrainPerformance.risk) {
+                conclusion += `<p>Riziko portfolia v testovacím období <strong>vzrostlo</strong> na ${minRiskTestPerformance.risk.toFixed(2)}% oproti trénovacímu období (${minRiskTrainPerformance.risk.toFixed(2)}%).</p>`;
+            } else {
+                conclusion += `<p>Riziko portfolia v testovacím období <strong>kleslo</strong> na ${minRiskTestPerformance.risk.toFixed(2)}% oproti trénovacímu období (${minRiskTrainPerformance.risk.toFixed(2)}%).</p>`;
+            }
+            
+            const minRiskTrainContrib1Diff = Math.abs(minRiskTrainContrib.percentContribution1 - minRiskTrainContrib.percentContribution2);
+            const minRiskTestContrib1Diff = Math.abs(minRiskTestContrib.percentContribution1 - minRiskTestContrib.percentContribution2);
+            
+            if (minRiskTestContrib1Diff > minRiskTrainContrib1Diff) {
+                conclusion += `<p>Příspěvky k riziku se v testovacím období <strong>více odlišovaly</strong> než v trénovacím období.</p>`;
+            } else {
+                conclusion += `<p>Příspěvky k riziku zůstaly v testovacím období <strong>podobné</strong> jako v trénovacím období.</p>`;
+            }
+            
+            conclusion += `<h5>Portfolio se shodným příspěvkem k riziku</h5>`;
+            conclusion += `<p>Toto portfolio má váhy ${(equalContribWeights.w1 * 100).toFixed(1)}% pro ${security1} a ${(equalContribWeights.w2 * 100).toFixed(1)}% pro ${security2}.</p>`;
+            
+            if (equalContribTestPerformance.meanReturn > equalContribTrainPerformance.meanReturn) {
+                conclusion += `<p>V testovacím období toto portfolio dosáhlo <strong>vyššího výnosu</strong> (${equalContribTestPerformance.meanReturn.toFixed(2)}%) než v trénovacím období (${equalContribTrainPerformance.meanReturn.toFixed(2)}%).</p>`;
+            } else {
+                conclusion += `<p>V testovacím období toto portfolio dosáhlo <strong>nižšího výnosu</strong> (${equalContribTestPerformance.meanReturn.toFixed(2)}%) než v trénovacím období (${equalContribTrainPerformance.meanReturn.toFixed(2)}%).</p>`;
+            }
+            
+            if (equalContribTestPerformance.risk > equalContribTrainPerformance.risk) {
+                conclusion += `<p>Riziko portfolia v testovacím období <strong>vzrostlo</strong> na ${equalContribTestPerformance.risk.toFixed(2)}% oproti trénovacímu období (${equalContribTrainPerformance.risk.toFixed(2)}%).</p>`;
+            } else {
+                conclusion += `<p>Riziko portfolia v testovacím období <strong>kleslo</strong> na ${equalContribTestPerformance.risk.toFixed(2)}% oproti trénovacímu období (${equalContribTrainPerformance.risk.toFixed(2)}%).</p>`;
+            }
+            
+            const equalContribTrainDiff = Math.abs(equalContribTrainContrib.percentContribution1 - equalContribTrainContrib.percentContribution2);
+            const equalContribTestDiff = Math.abs(equalContribTestContrib.percentContribution1 - equalContribTestContrib.percentContribution2);
+            
+            if (equalContribTestDiff > equalContribTrainDiff) {
+                conclusion += `<p>Příspěvky k riziku se v testovacím období <strong>více odlišovaly</strong> od rovnoměrného rozdělení než v trénovacím období.</p>`;
+            } else {
+                conclusion += `<p>Příspěvky k riziku zůstaly v testovacím období <strong>podobně rovnoměrné</strong> jako v trénovacím období.</p>`;
+            }
+            
+            // Porovnání obou portfolií
+            conclusion += `<h5>Porovnání obou portfolií</h5>`;
+            
+            if (minRiskTestPerformance.sharpeRatio > equalContribTestPerformance.sharpeRatio) {
+                conclusion += `<p>V testovacím období mělo <strong>portfolio s minimálním rizikem lepší poměr výnosu a rizika</strong> (Sharpeův poměr: ${minRiskTestPerformance.sharpeRatio.toFixed(3)}) než portfolio se shodným příspěvkem k riziku (Sharpeův poměr: ${equalContribTestPerformance.sharpeRatio.toFixed(3)}).</p>`;
+            } else {
+                conclusion += `<p>V testovacím období mělo <strong>portfolio se shodným příspěvkem k riziku lepší poměr výnosu a rizika</strong> (Sharpeův poměr: ${equalContribTestPerformance.sharpeRatio.toFixed(3)}) než portfolio s minimálním rizikem (Sharpeův poměr: ${minRiskTestPerformance.sharpeRatio.toFixed(3)}).</p>`;
+            }
+            
+            conclusion += `<p>Závěrem lze říci, že `;
+            
+            if (minRiskTestPerformance.sharpeRatio > equalContribTestPerformance.sharpeRatio) {
+                conclusion += `pro dané cenné papíry by bylo výhodnější zvolit portfolio s minimálním rizikem, které dosáhlo lepšího poměru výnosu a rizika v testovacím období.`;
+            } else {
+                conclusion += `pro dané cenné papíry by bylo výhodnější zvolit portfolio se shodným příspěvkem k riziku, které dosáhlo lepšího poměru výnosu a rizika v testovacím období.`;
+            }
+            
+            conclusion += `</p>`;
+            
+            return conclusion;
+        }
+    </script>
+</body>
+</html>

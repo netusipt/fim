@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="cs">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analýza peněžních toků</title>
+</head>
+
+<body>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <div style="max-width: 800px; margin: 0 auto; padding: 20px;">
+        <h1>Analýza peněžních toků</h1>
+        <div id="irrResults" style="margin-bottom: 20px; padding: 15px; background-color: #f5f5f5; border-radius: 5px;"></div>
+        <canvas id="chart"></canvas>
+    </div>
+    
+    <script type="module">
+        // Simple polynomial class implementation
+        class Polynomial {
+            constructor(coeffs) {
+                // Remove leading zeros
+                while (coeffs.length > 0 && coeffs[coeffs.length - 1] === 0) {
+                    coeffs.pop();
+                }
+                this.coeffs = coeffs;
+                this.deg = coeffs.length - 1;
+            }
+
+            eval(x) {
+                return this.coeffs.reduce((sum, coeff, i) => sum + coeff * Math.pow(x, i), 0);
+            }
+
+            derivative() {
+                const derivCoeffs = this.coeffs.slice(1).map((coeff, i) => coeff * (i + 1));
+                return new Polynomial(derivCoeffs);
+            }
+
+            mul(scalar) {
+                return new Polynomial(this.coeffs.map(c => c * scalar));
+            }
+
+            mod(divisor) {
+                if (this.deg < divisor.deg) return this;
+                
+                // Simple polynomial long division
+                let remainder = [...this.coeffs];
+                const divisorCoeffs = [...divisor.coeffs];
+                const degreeDiff = this.deg - divisor.deg;
+                
+                for (let i = 0; i <= degreeDiff; i++) {
+                    const pos = this.deg - i;
+                    const factor = remainder[pos] / divisorCoeffs[divisor.deg];
+                    
+                    if (factor !== 0) {
+                        for (let j = 0; j <= divisor.deg; j++) {
+                            remainder[pos - j] -= factor * divisorCoeffs[divisor.deg - j];
+                        }
+                    }
+                }
+                
+                // Trim leading zeros
+                while (remainder.length > 0 && Math.abs(remainder[remainder.length - 1]) < 1e-10) {
+                    remainder.pop();
+                }
+                
+                return new Polynomial(remainder.slice(0, remainder.length - divisor.deg));
+            }
+        }
+
+        function sturmSequence(poly) {
+            let sequence = [poly, poly.derivative()];
+            while (true) {
+                let nextPoly = sequence[sequence.length - 2].mod(sequence[sequence.length - 1]).mul(-1);
+                if (nextPoly.deg === -1) break;
+                sequence.push(nextPoly);
+            }
+            return sequence;
+        }
+
+        function signChanges(seq, x) {
+            let values = seq.map(p => p.eval(x));
+            let signs = values.map(v => Math.sign(v));
+            let changes = 0;
+            
+            for (let i = 1; i < signs.length; i++) {
+                if (signs[i] !== 0 && signs[i-1] !== 0 && signs[i] !== signs[i-1]) {
+                    changes++;
+                }
+            }
+            
+            return changes;
+        }
+
+        function countRealRoots(poly) {
+            let seq = sturmSequence(poly);
+            let changesAtNegInf = signChanges(seq, -1000); // Approximation for -Infinity
+            let changesAtPosInf = signChanges(seq, 1000);  // Approximation for +Infinity
+            return changesAtNegInf - changesAtPosInf;
+        }
+
+        function descartesRule(poly) {
+            let signs = poly.coeffs.map(Math.sign).filter(s => s !== 0);
+            let posChanges = 0;
+            
+            for (let i = 1; i < signs.length; i++) {
+                if (signs[i] !== signs[i-1]) {
+                    posChanges++;
+                }
+            }
+            
+            // For negative roots, substitute -x for x
+            let negCoeffs = [...poly.coeffs];
+            for (let i = 1; i < negCoeffs.length; i += 2) {
+                negCoeffs[i] = -negCoeffs[i];
+            }
+            
+            let negSigns = negCoeffs.map(Math.sign).filter(s => s !== 0);
+            let negChanges = 0;
+            
+            for (let i = 1; i < negSigns.length; i++) {
+                if (negSigns[i] !== negSigns[i-1]) {
+                    negChanges++;
+                }
+            }
+            
+            return { maxPositiveRoots: posChanges, maxNegativeRoots: negChanges };
+        }
+
+        // Add a function to find roots using numerical methods
+        function findRoots(poly, min = -10, max = 10, steps = 1000) {
+            const roots = [];
+            const step = (max - min) / steps;
+            
+            // Find sign changes which indicate roots
+            for (let i = 0; i < steps; i++) {
+                const x1 = min + i * step;
+                const x2 = x1 + step;
+                const y1 = poly.eval(x1);
+                const y2 = poly.eval(x2);
+                
+                if (y1 * y2 <= 0) {
+                    // Use bisection method to refine the root
+                    const root = bisectionMethod(poly, x1, x2);
+                    // Only add if it's a new root (not too close to existing ones)
+                    if (!roots.some(r => Math.abs(r - root) < 1e-5)) {
+                        roots.push(root);
+                    }
+                }
+            }
+            
+            return roots;
+        }
+        
+        function bisectionMethod(poly, a, b, tolerance = 1e-10, maxIterations = 100) {
+            let fa = poly.eval(a);
+            let fb = poly.eval(b);
+            
+            if (fa * fb > 0) {
+                return null; // No root in this interval
+            }
+            
+            let c, fc;
+            let iterations = 0;
+            
+            while ((b - a) > tolerance && iterations < maxIterations) {
+                c = (a + b) / 2;
+                fc = poly.eval(c);
+                
+                if (Math.abs(fc) < tolerance) {
+                    break; // Found a root
+                }
+                
+                if (fa * fc < 0) {
+                    b = c;
+                    fb = fc;
+                } else {
+                    a = c;
+                    fa = fc;
+                }
+                
+                iterations++;
+            }
+            
+            return (a + b) / 2;
+        }
+
+        let cashFlowPoly = new Polynomial([-10, 20, 50, 20, 10, -20]);
+
+        // Find and display IRR values
+        function displayIRR() {
+            const irrResultsDiv = document.getElementById('irrResults');
+            const realRootsCount = countRealRoots(cashFlowPoly);
+            const descartesEstimate = descartesRule(cashFlowPoly);
+            const roots = findRoots(cashFlowPoly);
+            
+            let html = `
+                <h2>Analýza IRR</h2>
+                <p><strong>Počet reálných hodnot IRR:</strong> ${realRootsCount}</p>
+                <p><strong>Odhad podle Descartesovy věty:</strong> 
+                   Maximálně ${descartesEstimate.maxPositiveRoots} kladných IRR, 
+                   Maximálně ${descartesEstimate.maxNegativeRoots} záporných IRR</p>
+            `;
+            
+            if (roots.length > 0) {
+                html += '<p><strong>Hodnoty IRR:</strong></p><ul>';
+                roots.forEach(root => {
+                    // Format as percentage with 2 decimal places
+                    const irrPercent = (root * 100).toFixed(2);
+                    html += `<li>${irrPercent}%</li>`;
+                });
+                html += '</ul>';
+            } else {
+                html += '<p>V zadaném rozsahu nebyly nalezeny žádné hodnoty IRR.</p>';
+            }
+            
+            irrResultsDiv.innerHTML = html;
+        }
+
+        console.log("Počet reálných IRR (kořenů):", countRealRoots(cashFlowPoly));
+        console.log("Odhad podle Descartovy věty:", descartesRule(cashFlowPoly));
+
+        function generateChart() {
+            const ctx = document.getElementById('chart').getContext('2d');
+            const labels = Array.from({ length: 200 }, (_, i) => -5 + i * 0.05);
+            const data = labels.map(x => cashFlowPoly.eval(x));
+            
+            // Find roots for visualization
+            const roots = findRoots(cashFlowPoly);
+            
+            // Create the main polynomial dataset
+            const datasets = [{
+                label: 'Polynom peněžních toků',
+                data: data,
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 2,
+                fill: false,
+                pointRadius: 0
+            }];
+            
+            // Add a horizontal line at y=0 to better visualize where roots occur
+            datasets.push({
+                label: 'Nulová linie',
+                data: labels.map(() => 0),
+                borderColor: 'rgba(200, 200, 200, 0.5)',
+                borderWidth: 1,
+                borderDash: [5, 5],
+                fill: false,
+                pointRadius: 0
+            });
+            
+            // Create a separate dataset for root points
+            if (roots.length > 0) {
+                const rootsData = labels.map(x => {
+                    // Check if this x value is close to any root
+                    return roots.some(root => Math.abs(x - root) < 0.025) ? 0 : null;
+                });
+                
+                datasets.push({
+                    label: 'Hodnoty IRR',
+                    data: rootsData,
+                    backgroundColor: 'rgba(255, 99, 132, 1)',
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    pointRadius: 6,
+                    pointHoverRadius: 8,
+                    showLine: false
+                });
+            }
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    title: {
+                        display: true,
+                        text: 'Polynom peněžních toků s hodnotami IRR',
+                        fontSize: 16
+                    },
+                    tooltips: {
+                        callbacks: {
+                            label: function(tooltipItem, data) {
+                                const datasetLabel = data.datasets[tooltipItem.datasetIndex].label;
+                                if (datasetLabel === 'Hodnoty IRR') {
+                                    // Find the closest root to this x value
+                                    const x = tooltipItem.xLabel;
+                                    const closestRoot = roots.reduce((closest, root) => 
+                                        Math.abs(x - root) < Math.abs(x - closest) ? root : closest
+                                    );
+                                    return `IRR: ${(closestRoot * 100).toFixed(2)}%`;
+                                }
+                                return `${datasetLabel}: ${tooltipItem.yLabel.toFixed(2)}`;
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { 
+                            title: { 
+                                display: true, 
+                                text: 'Sazba (r)' 
+                            },
+                            grid: {
+                                color: 'rgba(200, 200, 200, 0.2)'
+                            }
+                        },
+                        y: { 
+                            title: { 
+                                display: true, 
+                                text: 'Čistá současná hodnota' 
+                            },
+                            grid: {
+                                color: 'rgba(200, 200, 200, 0.2)'
+                            }
+                        }
+                    },
+                    elements: {
+                        line: {
+                            tension: 0.2 // Slight curve for better visualization
+                        }
+                    }
+                }
+            });
+        }
+
+        // Call both functions
+        displayIRR();
+        generateChart();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Portfolio Analyzér</title>
+    <style>
+        .container { max-width: 1200px; margin: auto; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        td, th { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        .formula { background: #f5f5f5; padding: 15px; margin: 15px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Analýza portfolia akcií CBKB vs CEZ</h2>
+        
+        <div class="formula">
+            <strong>Použité výpočty:</strong><br>
+            Výnos = Σ(váha * výnos)<br>
+            Rozptyl = w₁²σ₁² + w₂²σ₂² + 2w₁w₂Cov(R₁,R₂)<br>
+            Rizikový příspěvek = (w_i * (w_iσ_i² + w_jCov(R_i,R_j))) / σ_portfolio²
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+<script>
+const data = {
+    CBKB: [1.2, 0.8, 0.5, -0.2],  // Listopad-Únor
+    CEZ: [2.5, -1.0, -2.0, 4.0]
+};
+
+function calculateStats(returns) {
+    const mean = returns.reduce((a,b) => a + b, 0) / returns.length;
+    const variance = returns.reduce((a,b) => a + Math.pow(b - mean, 2), 0) / (returns.length - 1);
+    return { 
+        mean: mean,
+        variance: variance,
+        stdDev: Math.sqrt(variance)
+    };
+}
+
+function calculateCovariance(returnsA, returnsB, meanA, meanB) {
+    let covariance = 0;
+    for(let i = 0; i < returnsA.length; i++) {
+        covariance += (returnsA[i] - meanA) * (returnsB[i] - meanB);
+    }
+    return covariance / (returnsA.length - 1);
+}
+
+function calculateWeights(statsA, statsB, covariance) {
+    // Minimalni riziko
+    const denominator = statsA.variance + statsB.variance - 2 * covariance;
+    const wA = (statsB.variance - covariance) / denominator;
+    const wB = 1 - wA;
+
+    // Rovnoměrné riziko (risk parity)
+    const inverseVolA = 1 / statsA.stdDev;
+    const inverseVolB = 1 / statsB.stdDev;
+    const totalInverseVol = inverseVolA + inverseVolB;
+    const rpW = {
+        wA: inverseVolA / totalInverseVol,
+        wB: inverseVolB / totalInverseVol
+    };
+
+    return {
+        minRisk: { wA: Math.max(0, Math.min(1, wA)), wB: Math.max(0, Math.min(1, wB)) },
+        riskParity: rpW
+    };
+}
+
+function backtestPortfolio(weights, testData) {
+    const portfolioReturns = [];
+    for(let i = 0; i < testData.CBKB.length; i++) {
+        const ret = weights.wA * testData.CBKB[i] + weights.wB * testData.CEZ[i];
+        portfolioReturns.push(ret);
+    }
+    
+    const stats = calculateStats(portfolioReturns);
+    const testCovariance = calculateCovariance(
+        testData.CBKB, testData.CEZ,
+        calculateStats(testData.CBKB).mean,
+        calculateStats(testData.CEZ).mean
+    );
+
+    // Výpočet rizikových příspěvků
+    const contribA = (weights.wA * (weights.wA * stats.variance + weights.wB * testCovariance)) / stats.variance;
+    const contribB = 1 - contribA;
+
+    return {
+        returns: portfolioReturns,
+        stats: stats,
+        riskContributions: [contribA * 100, contribB * 100]
+    };
+}
+
+function formatPercent(num) {
+    return num.toFixed(2) + '%';
+}
+
+function analyzePortfolio() {
+    // Rozdělení dat na tréninkovou a testovací sadu
+    const trainData = {
+        CBKB: data.CBKB.slice(0, 2),
+        CEZ: data.CEZ.slice(0, 2)
+    };
+    
+    const testData = {
+        CBKB: data.CBKB.slice(2),
+        CEZ: data.CEZ.slice(2)
+    };
+
+    // Výpočet statistik
+    const statsCBKB = calculateStats(trainData.CBKB);
+    const statsCEZ = calculateStats(trainData.CEZ);
+    const covariance = calculateCovariance(
+        trainData.CBKB, trainData.CEZ, 
+        statsCBKB.mean, statsCEZ.mean
+    );
+
+    // Optimalizace portfolia
+    const weights = calculateWeights(statsCBKB, statsCEZ, covariance);
+    
+    // Backtest
+    const minRiskBacktest = backtestPortfolio(weights.minRisk, testData);
+    const riskParityBacktest = backtestPortfolio(weights.riskParity, testData);
+
+    // Generování výsledků
+    const results = `
+        <h3>Tréninková data (Listopad-Prosinec)</h3>
+        <table>
+            <tr><th>Aktivum</th><th>Průměrný výnos</th><th>Volatilita</th></tr>
+            <tr><td>CBKB</td><td>${statsCBKB.mean.toFixed(2)}%</td><td>${statsCBKB.stdDev.toFixed(2)}%</td></tr>
+            <tr><td>CEZ</td><td>${statsCEZ.mean.toFixed(2)}%</td><td>${statsCEZ.stdDev.toFixed(2)}%</td></tr>
+            <tr><td>Kovariance</td><td colspan="2">${covariance.toFixed(2)}</td></tr>
+        </table>
+
+        <h3>Optimalizovaná portfolia</h3>
+        <table>
+            <tr><th>Portfolio</th><th>Váhy CBKB</th><th>Váhy CEZ</th><th>Očekávaný výnos</th><th>Očekávané riziko</th></tr>
+            <tr>
+                <td>Minimální riziko</td>
+                <td>${(weights.minRisk.wA * 100).toFixed(0)}%</td>
+                <td>${(weights.minRisk.wB * 100).toFixed(0)}%</td>
+                <td>${(weights.minRisk.wA * statsCBKB.mean + weights.minRisk.wB * statsCEZ.mean).toFixed(2)}%</td>
+                <td>${Math.sqrt(
+                    Math.pow(weights.minRisk.wA, 2) * statsCBKB.variance +
+                    Math.pow(weights.minRisk.wB, 2) * statsCEZ.variance +
+                    2 * weights.minRisk.wA * weights.minRisk.wB * covariance
+                ).toFixed(2)}%</td>
+            </tr>
+            <tr>
+                <td>Rovnoměrné riziko</td>
+                <td>${(weights.riskParity.wA * 100).toFixed(0)}%</td>
+                <td>${(weights.riskParity.wB * 100).toFixed(0)}%</td>
+                <td>${(weights.riskParity.wA * statsCBKB.mean + weights.riskParity.wB * statsCEZ.mean).toFixed(2)}%</td>
+                <td>${Math.sqrt(
+                    Math.pow(weights.riskParity.wA, 2) * statsCBKB.variance +
+                    Math.pow(weights.riskParity.wB, 2) * statsCEZ.variance +
+                    2 * weights.riskParity.wA * weights.riskParity.wB * covariance
+                ).toFixed(2)}%</td>
+            </tr>
+        </table>
+
+        <h3>Backtest na testovacích datech (Leden-Únor)</h3>
+        <table>
+            <tr><th>Portfolio</th><th>Skutečný výnos</th><th>Skutečné riziko</th><th>Příspěvek k riziku CBKB</th><th>Příspěvek k riziku CEZ</th></tr>
+            <tr>
+                <td>Minimální riziko</td>
+                <td>${minRiskBacktest.stats.mean.toFixed(2)}%</td>
+                <td>${minRiskBacktest.stats.stdDev.toFixed(2)}%</td>
+                <td>${minRiskBacktest.riskContributions[0].toFixed(1)}%</td>
+                <td>${minRiskBacktest.riskContributions[1].toFixed(1)}%</td>
+            </tr>
+            <tr>
+                <td>Rovnoměrné riziko</td>
+                <td>${riskParityBacktest.stats.mean.toFixed(2)}%</td>
+                <td>${riskParityBacktest.stats.stdDev.toFixed(2)}%</td>
+                <td>${riskParityBacktest.riskContributions[0].toFixed(1)}%</td>
+                <td>${riskParityBacktest.riskContributions[1].toFixed(1)}%</td>
+            </tr>
+        </table>
+    `;
+
+    document.getElementById('results').innerHTML = results;
+}
+
+analyzePortfolio();
+</script>
+</body>
+</html>
